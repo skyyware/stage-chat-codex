@@ -11,25 +11,18 @@ deliberately narrow execution profile.
 
 ## Install
 
-While the repositories are private, add both VCS repositories to the consuming
-application. Composer does not inherit repositories from dependencies.
+Install the public package from
+[Packagist](https://packagist.org/packages/skyyware/stage-chat-codex):
 
-```json
-{
-  "repositories": [
-    {"type": "vcs", "url": "git@github.com:skyyware/stage-chat-codex.git"},
-    {"type": "vcs", "url": "git@github.com:skyyware/stage-chat.git"}
-  ],
-  "require": {"skyyware/stage-chat-codex": "^0.2.0"},
-  "config": {
-    "allow-plugins": false,
-    "preferred-install": {"skyyware/*": "source", "*": "dist"}
-  }
-}
+```sh
+composer require skyyware/stage-chat-codex:^0.2.1
 ```
 
-Run `composer install` with an SSH identity that can read both repositories.
-The Git tags are Composer versions; this does not publish to Packagist.
+Composer also installs Stage Chat. No GitHub account, SSH identity, or VCS
+override is required. Commit the application's lockfile. Version 0.2.1
+preserves the 0.2.0 connector API; read [the changelog](CHANGELOG.md) before
+updating. Running real completions requires a separately installed, supported
+Codex CLI and an approved authenticated account.
 
 ## Use
 
@@ -46,10 +39,10 @@ use Stage\Chat\Role;
 
 $chat = new Codex(new Options(
     binary: '/opt/codex/0.159.3/codex',
-    workingDirectory: '/srv/citychat/work',
-    codexHome: '/srv/citychat/codex',
+    workingDirectory: '/srv/stage-chat/work',
+    codexHome: '/srv/stage-chat/codex',
     model: 'gpt-6.1-sol',
-    outputSchema: '/srv/citychat/app/config/answer.schema.json',
+    outputSchema: '/srv/stage-chat/schema/answer.json',
     timeoutSeconds: 25,
     reasoningEffort: 'low',
     serviceTier: 'fast',
@@ -129,3 +122,7 @@ CLI home. It checks successful and failed provider responses, known conversation
 tables and isolation between concurrent requests. CLI metadata files are expected.
 See the privacy limits in
 [operations](docs/operations.md).
+
+Contributions from people and agents are welcome. Read
+[CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), and
+[RELEASING.md](RELEASING.md). Use [private reporting](SECURITY.md) for vulnerabilities.

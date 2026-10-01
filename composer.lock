@@ -4,14 +4,14 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1a807b087e9547354ba81090b57cf8b7",
+    "content-hash": "abaa7fd26e3383f0f3cafbeb2b0a6474",
     "packages": [
         {
             "name": "skyyware/stage-chat",
             "version": "v0.1.0",
             "source": {
                 "type": "git",
-                "url": "git@github.com:skyyware/stage-chat.git",
+                "url": "https://github.com/skyyware/stage-chat.git",
                 "reference": "240cf0852ea18c83ee2a887ef5cf4b1c2c942263"
             },
             "dist": {

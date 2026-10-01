@@ -1,13 +1,18 @@
 {
   "name": "skyyware/stage-chat-codex",
   "description": "A stateless Codex CLI connector for Stage Chat.",
+  "homepage": "https://github.com/skyyware/stage-chat-codex",
+  "support": {
+    "issues": "https://github.com/skyyware/stage-chat-codex/issues",
+    "source": "https://github.com/skyyware/stage-chat-codex",
+    "docs": "https://github.com/skyyware/stage-chat-codex/blob/main/README.md"
+  },
   "type": "library",
   "license": "MIT",
   "require": {"php": "^8.4", "ext-json": "*", "skyyware/stage-chat": "^0.1.0"},
   "require-dev": {"ext-posix": "*", "phpstan/phpstan": "^2.1", "phpunit/phpunit": "^12.0"},
-  "repositories": [{"type": "vcs", "url": "git@github.com:skyyware/stage-chat.git"}],
   "autoload": {"psr-4": {"Stage\\Chat\\Codex\\": "src/"}},
   "autoload-dev": {"psr-4": {"Stage\\Chat\\Codex\\Tests\\": "tests/"}},
   "scripts": {"check": ["@composer validate --strict", "phpstan analyse --no-progress", "phpunit"]},
-  "config": {"sort-packages": true, "allow-plugins": false, "preferred-install": {"skyyware/*": "source", "*": "dist"}}
+  "config": {"sort-packages": true, "allow-plugins": false}
 }

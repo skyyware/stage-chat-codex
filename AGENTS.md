@@ -14,5 +14,6 @@ CLI arguments, environment passthrough or tool configuration to the public API.
 No explanatory source comments or TODOs; static-analysis annotations and legal
 notices are allowed. Keep runtime data and dependencies outside Git.
 
-Keep repositories private and automation disabled until the maintainer changes
-those settings explicitly. Publish validated versions through manual Git tags.
+This is a public MIT package. Keep repository automation disabled. Follow
+CONTRIBUTING.md and RELEASING.md for local checks, immutable tags, GitHub Releases,
+Packagist distribution, and fresh consumers. Preserve published tags and callers.
