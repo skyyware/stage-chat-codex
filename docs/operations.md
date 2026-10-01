@@ -118,7 +118,11 @@ Results for the local direct Codex CLI 0.159.3 executable and PHP 8.4.26:
   same-user authentication link and disposable home were removed. No account
   configuration, application runtime or shared host settings were changed.
 
-Outcome: ship the additive option as `v0.2.0`, retaining `stage-chat v0.1.0`.
+The private `v0.2.0` tag was pushed at
+`f8ce0e124ce7594e627ee916937b620db29d9259`, retaining `stage-chat v0.1.0`
+at `240cf0852ea18c83ee2a887ef5cf4b1c2c942263`. A fresh Composer consumer
+installed those exact references without development dependencies and exercised
+the Fast option successfully through real subprocess pipes with the fake CLI.
 These small synthetic samples isolate the connector and supplied evidence; they
 do not establish Citychat retrieval quality, municipal correctness, a production
 latency percentile or provider retention. The application owner must run the
