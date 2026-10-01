@@ -18,6 +18,7 @@ final readonly class Options
         public float $timeoutSeconds = 25,
         public string $reasoningEffort = 'low',
         public int $maxOutputBytes = 262144,
+        public ?string $serviceTier = null,
     ) {
         if (!str_starts_with($binary, '/') || !is_file($binary) || !is_executable($binary)) {
             throw new InvalidArgumentException('Codex binary must be an absolute executable file path.');
@@ -40,6 +41,10 @@ final readonly class Options
 
         if (!in_array($reasoningEffort, ['none', 'minimal', 'low', 'medium', 'high'], true)) {
             throw new InvalidArgumentException('Codex reasoning effort is invalid.');
+        }
+
+        if ($serviceTier !== null && $serviceTier !== 'fast') {
+            throw new InvalidArgumentException('Codex service tier must be fast or null.');
         }
 
         if (!is_finite($timeoutSeconds) || $timeoutSeconds <= 0 || $timeoutSeconds > 120 || $maxOutputBytes < 1024 || $maxOutputBytes > 1048576) {

@@ -12,7 +12,7 @@ import threading
 import uuid
 
 
-def run(binary, php, model, concurrency, provider_error):
+def run(binary, php, model, service_tier, concurrency, provider_error):
     package = Path(__file__).resolve().parent.parent
     runtime = package / ".runtime"
     runtime.mkdir(mode=0o700, exist_ok=True)
@@ -39,7 +39,11 @@ def run(binary, php, model, concurrency, provider_error):
                     self.send_response(400)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
-                    self.wfile.write(json.dumps({"error": {"message": response_marker}}).encode())
+                    self.wfile.write(json.dumps({"error": {
+                        "message": response_marker,
+                        "type": "invalid_request_error",
+                        "code": "unsupported_service_tier" if service_tier == "fast" else "fixture_error",
+                    }}).encode())
                     return
                 message = {
                     "id": "msg_probe",
@@ -79,9 +83,12 @@ def run(binary, php, model, concurrency, provider_error):
         (root / "codex" / "config.toml").write_text('developer_instructions = "UNEXPECTED_USER_CONFIG_SENTINEL"\n')
         specifications = []
         for request_marker in markers:
-            specification = json.loads(subprocess.check_output([
+            arguments = [
                 php, str(package / "tests" / "wire-command.php"), binary, str(root), model, request_marker,
-            ], timeout=10))
+            ]
+            if service_tier is not None:
+                arguments.append(service_tier)
+            specification = json.loads(subprocess.check_output(arguments, timeout=10))
             if request_marker in json.dumps(specification["command"]):
                 raise RuntimeError("Conversation leaked into arguments")
             specifications.append(specification)
@@ -125,6 +132,12 @@ def run(binary, php, model, concurrency, provider_error):
             if any(other in result.stdout for other in markers.values() if other != response_marker):
                 raise RuntimeError("Cross-request answer leakage")
         for request in captured:
+            if request.get("model") != model:
+                raise RuntimeError("Requested model changed")
+            if request.get("service_tier") != ("priority" if service_tier == "fast" else None):
+                raise RuntimeError("Requested service tier changed")
+            if request.get("reasoning", {}).get("effort") != "low":
+                raise RuntimeError("Reasoning effort changed")
             if request.get("tools") not in (None, []) or request.get("store") is not False:
                 raise RuntimeError("Tools or provider response storage enabled")
             encoded = json.dumps(request)
@@ -154,7 +167,8 @@ def run(binary, php, model, concurrency, provider_error):
             finally:
                 connection.close()
         version = subprocess.check_output([binary, "--version"], text=True, timeout=5).strip()
-        print(json.dumps({"cli": version, "model": model, "requests": len(captured), "tools": 0,
+        print(json.dumps({"cli": version, "model": model, "service_tier": captured[0].get("service_tier"),
+                          "reasoning_effort": "low", "requests": len(captured), "tools": 0,
                           "response_storage": False, "content_markers_on_disk": 0, "content_rows": 0, "concurrency": concurrency,
                           "scenario": "provider-error" if provider_error else "success", "provider": "local synthetic fixture"}))
 
@@ -163,7 +177,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--binary", default=shutil.which("codex"), required=shutil.which("codex") is None)
 parser.add_argument("--php", default=shutil.which("php"), required=shutil.which("php") is None)
 parser.add_argument("--model", required=True)
+parser.add_argument("--service-tier", choices=["fast"])
 parser.add_argument("--concurrency", type=int, choices=range(1, 4), default=1)
 arguments = parser.parse_args()
 for provider_error in [False, True]:
-    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.concurrency, provider_error)
+    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.concurrency, provider_error)

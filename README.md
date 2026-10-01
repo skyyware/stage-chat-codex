@@ -20,7 +20,7 @@ application. Composer does not inherit repositories from dependencies.
     {"type": "vcs", "url": "git@github.com:skyyware/stage-chat-codex.git"},
     {"type": "vcs", "url": "git@github.com:skyyware/stage-chat.git"}
   ],
-  "require": {"skyyware/stage-chat-codex": "^0.1.0"},
+  "require": {"skyyware/stage-chat-codex": "^0.2.0"},
   "config": {
     "allow-plugins": false,
     "preferred-install": {"skyyware/*": "source", "*": "dist"}
@@ -52,6 +52,7 @@ $chat = new Codex(new Options(
     outputSchema: '/srv/citychat/app/config/answer.schema.json',
     timeoutSeconds: 25,
     reasoningEffort: 'low',
+    serviceTier: 'fast',
 ));
 
 $response = $chat->complete(new Request(
@@ -62,6 +63,14 @@ $response = $chat->complete(new Request(
 
 $answer = json_decode($response->text, true, 32, JSON_THROW_ON_ERROR);
 ```
+
+`serviceTier: 'fast'` explicitly requests Fast Mode. The connector enables the
+CLI's Fast feature and selects its `fast` tier, which sends `priority` to the
+provider. Reasoning effort is independent. Omit `serviceTier` or use `null` to
+keep the existing CLI default; other tier strings are rejected. The connector
+does not switch models or retry with a different tier. Fast Mode requires
+account and model support and consumes more usage; see
+[availability and verification](docs/operations.md#fast-mode).
 
 For that example, `answer.schema.json` can contain:
 
@@ -103,6 +112,7 @@ belong in the application. Stage core and Stage CMS are not runtime dependencies
 composer install
 composer check
 python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6.1-sol --concurrency 3
+python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6.1-sol --service-tier fast --concurrency 3
 ```
 
 `composer check` exercises real subprocess pipes with a local fake CLI,
@@ -111,8 +121,9 @@ responses, child cleanup and unknown CLI versions. PHPStan runs at its maximum
 level. The tests need PHP's POSIX extension.
 
 The Python probe runs the actual CLI against a local synthetic server. It needs
-no account or model call. It verifies the request has no tools, response storage
-is disabled, personal configuration is ignored, context stays in the user data,
+no account or model call. It verifies the exact model, service tier and reasoning
+effort. It also checks that the request has no tools, response storage is disabled,
+personal configuration is ignored, context stays in the user data,
 the JSON answer arrives and no prompt or answer marker appears in the temporary
 CLI home. It checks successful and failed provider responses, known conversation
 tables and isolation between concurrent requests. CLI metadata files are expected.

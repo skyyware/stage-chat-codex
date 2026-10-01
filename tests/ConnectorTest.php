@@ -178,6 +178,55 @@ final class ConnectorTest extends TestCase
         }
     }
 
+    public function testFastTierReachesTheProcessWithoutChangingModelOrReasoning(): void
+    {
+        $options = new Options(
+            __DIR__ . '/fixtures/codex.php',
+            $this->work,
+            $this->home,
+            'gpt-6.1-sol',
+            __DIR__ . '/fixtures/answer.json',
+            serviceTier: 'fast',
+        );
+        $response = new Codex($options)->complete($this->request());
+        $answer = json_decode($response->text, true, 32, JSON_THROW_ON_ERROR);
+        self::assertIsArray($answer);
+        self::assertIsArray($answer['argv']);
+        self::assertContains('gpt-6.1-sol', $answer['argv']);
+        self::assertContains('service_tier="fast"', $answer['argv']);
+        self::assertContains('features.fast_mode=true', $answer['argv']);
+        self::assertContains('model_reasoning_effort="low"', $answer['argv']);
+        $this->assertChildStopped();
+    }
+
+    public function testExistingCallersDoNotRequestAServiceTier(): void
+    {
+        $command = new Profile($this->options())->command($this->request());
+        self::assertSame([], array_filter($command, static fn (string $argument): bool => str_starts_with($argument, 'service_tier=')));
+    }
+
+    #[DataProvider('unsupportedServiceTiers')]
+    public function testUnverifiedServiceTiersAreRejected(string $tier): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        new Options(
+            __DIR__ . '/fixtures/codex.php',
+            $this->work,
+            $this->home,
+            'gpt-6.1-sol',
+            __DIR__ . '/fixtures/answer.json',
+            serviceTier: $tier,
+        );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function unsupportedServiceTiers(): iterable
+    {
+        foreach (['', 'priority', 'ultrafast'] as $tier) {
+            yield $tier => [$tier];
+        }
+    }
+
     public function testWorkingDirectoryCannotContainProjectInstructions(): void
     {
         file_put_contents($this->work . '/AGENTS.md', 'Unexpected instructions');
