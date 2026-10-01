@@ -92,7 +92,13 @@ The initial local verification used Codex 0.159.2 with `gpt-6.1-sol` and
 `gpt-6-luna`. Both synthetic wire probes exposed no tools and retained no content
 markers. One real `gpt-6.1-sol` completion through the PHP connector returned the
 expected JSON answer in 6.68 seconds. This is a smoke test, not a latency target.
-Verify Codex 0.159.3 on its deployment host before accepting visitor traffic.
+On 2026-10-01, the deployment owner also ran the probe on Linux with the direct
+Codex 0.159.3 executable, `gpt-6-luna` and three concurrent requests under an
+isolated service account. Both successful responses and provider errors passed.
+There were no exposed tools, retained content markers or conversation-table
+rows, and response storage was disabled. The tested source and probe files
+matched the `v0.1.0` release. This check used a local synthetic provider; it is
+separate from the authenticated application check on that host.
 
 Relevant upstream references are [non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)
 and the [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
