@@ -12,7 +12,7 @@ import threading
 import uuid
 
 
-def run(binary, php, model, service_tier, reasoning_effort, concurrency, provider_error):
+def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, concurrency, provider_error):
     package = Path(__file__).resolve().parent.parent
     runtime = package / ".runtime"
     runtime.mkdir(mode=0o700, exist_ok=True)
@@ -86,7 +86,7 @@ def run(binary, php, model, service_tier, reasoning_effort, concurrency, provide
             arguments = [
                 php, str(package / "tests" / "wire-command.php"), binary, str(root), model, request_marker,
             ]
-            arguments.extend([service_tier or "", reasoning_effort])
+            arguments.extend([service_tier or "", reasoning_effort, model_catalog_path or ""])
             specification = json.loads(subprocess.check_output(arguments, timeout=10))
             if request_marker in json.dumps(specification["command"]):
                 raise RuntimeError("Conversation leaked into arguments")
@@ -133,7 +133,7 @@ def run(binary, php, model, service_tier, reasoning_effort, concurrency, provide
         for request in captured:
             if request.get("model") != model:
                 raise RuntimeError("Requested model changed")
-            if request.get("service_tier") != ("priority" if service_tier == "fast" else None):
+            if request.get("service_tier") != ("priority" if service_tier == "fast" else service_tier):
                 raise RuntimeError("Requested service tier changed: " + json.dumps({"requested": service_tier, "observed": request.get("service_tier")}))
             if request.get("reasoning", {}).get("effort") != reasoning_effort:
                 raise RuntimeError("Reasoning effort changed")
@@ -176,9 +176,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--binary", default=shutil.which("codex"), required=shutil.which("codex") is None)
 parser.add_argument("--php", default=shutil.which("php"), required=shutil.which("php") is None)
 parser.add_argument("--model", required=True)
-parser.add_argument("--service-tier", choices=["fast"])
+parser.add_argument("--service-tier", choices=["fast", "ultrafast"])
 parser.add_argument("--reasoning-effort", choices=["none", "minimal", "low", "medium", "high", "max"], default="low")
+parser.add_argument("--model-catalog", type=os.path.abspath)
 parser.add_argument("--concurrency", type=int, choices=range(1, 4), default=1)
 arguments = parser.parse_args()
 for provider_error in [False, True]:
-    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.reasoning_effort, arguments.concurrency, provider_error)
+    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.reasoning_effort, arguments.model_catalog, arguments.concurrency, provider_error)

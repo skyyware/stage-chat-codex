@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stage\Chat\Codex;
 
 use Closure;
+use InvalidArgumentException;
 use SensitiveParameter;
 use Stage\Chat\Connector;
 use Stage\Chat\Failure;
@@ -21,6 +22,11 @@ final readonly class Codex implements Connector
     /** @param (Closure(): bool)|null $cancelled */
     public function complete(#[SensitiveParameter] Request $request, #[SensitiveParameter] ?Closure $cancelled = null): Response
     {
+        try {
+            ModelCatalog::verify($this->options);
+        } catch (InvalidArgumentException) {
+            throw new Failure(FailureReason::Unavailable);
+        }
         $profile = new Profile($this->options);
         $process = new Process();
         $deadline = hrtime(true) / 1e9 + $this->options->timeoutSeconds;

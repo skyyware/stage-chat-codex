@@ -244,6 +244,124 @@ final class ConnectorTest extends TestCase
         yield 'fast' => ['fast'];
     }
 
+    #[DataProvider('catalogServiceTiers')]
+    public function testAdvertisedCatalogSelectionReachesTheProcess(?string $tier): void
+    {
+        $path = $this->modelCatalog();
+        $options = new Options(__DIR__ . '/fixtures/codex-0.160.0.php', $this->work, $this->home, 'gpt-6-astra', __DIR__ . '/fixtures/answer.json', reasoningEffort: 'max', serviceTier: $tier, modelCatalogPath: $path);
+        $answer = json_decode(new Codex($options)->complete($this->request())->text, true, 32, JSON_THROW_ON_ERROR);
+        self::assertIsArray($answer);
+        self::assertIsArray($answer['argv']);
+        self::assertContains('model_catalog_json=' . json_encode($path, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), $answer['argv']);
+        self::assertContains('model_reasoning_effort="max"', $answer['argv']);
+        $settings = array_values(array_filter($answer['argv'], static fn (mixed $value): bool => is_string($value) && str_starts_with($value, 'service_tier=')));
+        self::assertSame($tier === null ? [] : ['service_tier="' . $tier . '"'], $settings);
+        if ($tier !== null) {
+            self::assertContains('features.fast_mode=true', $answer['argv']);
+        }
+        $this->assertChildStopped();
+    }
+
+    /** @return iterable<string, array{?string}> */
+    public static function catalogServiceTiers(): iterable
+    {
+        yield 'default' => [null];
+        yield 'fast' => ['fast'];
+        yield 'ultrafast' => ['ultrafast'];
+    }
+
+    #[DataProvider('invalidModelCatalogs')]
+    public function testInvalidOrUnadvertisedCatalogIsRejectedBeforeProcess(string $content): void
+    {
+        try {
+            new Options(__DIR__ . '/fixtures/started.php', $this->work, $this->home, 'gpt-6-astra', __DIR__ . '/fixtures/answer.json', reasoningEffort: 'max', serviceTier: 'ultrafast', modelCatalogPath: $this->modelCatalog($content));
+            self::fail('Expected an invalid catalog.');
+        } catch (InvalidArgumentException) {
+        }
+        self::assertFileDoesNotExist($this->home . '/process-started');
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidModelCatalogs(): iterable
+    {
+        $model = ['slug' => 'gpt-6-astra', 'supported_reasoning_levels' => [['effort' => 'max']], 'service_tiers' => [['id' => 'ultrafast']]];
+        yield 'broken-json' => ['{'];
+        yield 'missing-models' => ['{}'];
+        yield 'empty-models' => ['{"models":[]}'];
+        yield 'models-not-list' => [json_encode(['models' => ['selected' => $model]], JSON_THROW_ON_ERROR)];
+        yield 'model-not-object' => ['{"models":["gpt-6-astra"]}'];
+        yield 'wrong-model' => [json_encode(['models' => [array_replace($model, ['slug' => 'gpt-6-luna'])]], JSON_THROW_ON_ERROR)];
+        yield 'duplicate-model' => [json_encode(['models' => [$model, $model]], JSON_THROW_ON_ERROR)];
+        yield 'missing-max' => [json_encode(['models' => [array_replace($model, ['supported_reasoning_levels' => [['effort' => 'high']]])]], JSON_THROW_ON_ERROR)];
+        yield 'missing-ultrafast' => [json_encode(['models' => [array_replace($model, ['service_tiers' => [['id' => 'priority']]])]], JSON_THROW_ON_ERROR)];
+        yield 'tier-case' => [json_encode(['models' => [array_replace($model, ['service_tiers' => [['id' => 'ULTRAFAST']]])]], JSON_THROW_ON_ERROR)];
+        yield 'invalid-tier-entry' => [json_encode(['models' => [array_replace($model, ['service_tiers' => [['id' => 1]]])]], JSON_THROW_ON_ERROR)];
+        yield 'capabilities-not-list' => [json_encode(['models' => [array_replace($model, ['service_tiers' => ['ultrafast' => ['id' => 'ultrafast']]])]], JSON_THROW_ON_ERROR)];
+    }
+
+    #[DataProvider('invalidModelCatalogPaths')]
+    public function testUnsafeCatalogPathIsRejected(string $case): void
+    {
+        $path = $this->modelCatalog();
+        if ($case === 'relative') {
+            $path = 'models.json';
+        } elseif ($case === 'missing') {
+            $path = $this->root . '/missing.json';
+        } elseif ($case === 'directory') {
+            $path = $this->root;
+        } elseif ($case === 'symlink') {
+            symlink($path, $this->root . '/linked.json');
+            $path = $this->root . '/linked.json';
+        } elseif ($case === 'oversized') {
+            file_put_contents($path, str_repeat(' ', 4194305));
+        } elseif ($case === 'writable') {
+            chmod($path, 0666);
+        }
+        $this->expectException(InvalidArgumentException::class);
+        new Options(__DIR__ . '/fixtures/codex.php', $this->work, $this->home, 'gpt-6-astra', __DIR__ . '/fixtures/answer.json', reasoningEffort: 'max', serviceTier: 'ultrafast', modelCatalogPath: $path);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidModelCatalogPaths(): iterable
+    {
+        foreach (['relative', 'missing', 'directory', 'symlink', 'oversized', 'writable'] as $case) {
+            yield $case => [$case];
+        }
+    }
+
+    public function testCatalogLosingSupportAfterConfigurationStopsBeforeAnyProcess(): void
+    {
+        $path = $this->modelCatalog();
+        $options = new Options(__DIR__ . '/fixtures/started.php', $this->work, $this->home, 'gpt-6-astra', __DIR__ . '/fixtures/answer.json', reasoningEffort: 'max', serviceTier: 'ultrafast', modelCatalogPath: $path);
+        file_put_contents($path, '{"models":[]}');
+        try {
+            new Codex($options)->complete($this->request());
+            self::fail('Expected an unavailable catalog.');
+        } catch (Failure $failure) {
+            self::assertSame(FailureReason::Unavailable, $failure->reason);
+        }
+        self::assertFileDoesNotExist($this->home . '/process-started');
+    }
+
+    public function testHomeModelCacheDoesNotImplicitlyEnableUltrafast(): void
+    {
+        copy($this->modelCatalog(), $this->home . '/models_cache.json');
+        $this->expectException(InvalidArgumentException::class);
+        new Options(__DIR__ . '/fixtures/codex.php', $this->work, $this->home, 'gpt-6-astra', __DIR__ . '/fixtures/answer.json', reasoningEffort: 'max', serviceTier: 'ultrafast');
+    }
+
+    private function modelCatalog(?string $content = null): string
+    {
+        $path = $this->root . '/trusted catalog.json';
+        file_put_contents($path, $content ?? json_encode(['models' => [[
+            'slug' => 'gpt-6-astra',
+            'supported_reasoning_levels' => [['effort' => 'low'], ['effort' => 'max']],
+            'service_tiers' => [['id' => 'priority'], ['id' => 'ultrafast']],
+        ]]], JSON_THROW_ON_ERROR));
+        chmod($path, 0600);
+        return $path;
+    }
+
     #[DataProvider('unsupportedReasoningEfforts')]
     public function testUnverifiedReasoningEffortsAreRejected(string $effort): void
     {

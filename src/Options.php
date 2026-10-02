@@ -19,6 +19,7 @@ final readonly class Options
         public string $reasoningEffort = 'low',
         public int $maxOutputBytes = 262144,
         public ?string $serviceTier = null,
+        public ?string $modelCatalogPath = null,
     ) {
         if (!str_starts_with($binary, '/') || !is_file($binary) || !is_executable($binary)) {
             throw new InvalidArgumentException('Codex binary must be an absolute executable file path.');
@@ -43,8 +44,8 @@ final readonly class Options
             throw new InvalidArgumentException('Codex reasoning effort is invalid.');
         }
 
-        if ($serviceTier !== null && $serviceTier !== 'fast') {
-            throw new InvalidArgumentException('Codex service tier must be fast or null.');
+        if ($serviceTier !== null && !in_array($serviceTier, ['fast', 'ultrafast'], true)) {
+            throw new InvalidArgumentException('Codex service tier must be fast, ultrafast, or null.');
         }
 
         if (!is_finite($timeoutSeconds) || $timeoutSeconds <= 0 || $timeoutSeconds > 120 || $maxOutputBytes < 1024 || $maxOutputBytes > 1048576) {
@@ -66,5 +67,7 @@ final readonly class Options
         if (!is_array($decoded) || ($decoded['type'] ?? null) !== 'object') {
             throw new InvalidArgumentException('Output schema must describe a JSON object.');
         }
+
+        ModelCatalog::verify($this);
     }
 }

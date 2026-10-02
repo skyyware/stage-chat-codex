@@ -99,15 +99,55 @@ Reasoning and speed are independent; the existing default remains `low`.
 Use a reasoning level advertised by the selected model and verify its exact
 request value with `--reasoning-effort` in the wire probe.
 
-On 2 October 2026, the authenticated model catalogs for the tested macOS
-CLI 0.160.0 and Linux CLI 0.159.3 advertised Astra Max and the `priority` tier,
-but no `ultrafast` tier. A direct Ultrafast request silently omitted
-`service_tier`, including with the Fast feature disabled. The configuration
-reference requires a tier advertised by the active model. The package therefore
-rejects `ultrafast` before starting a completion. It supplies no replacement
-catalog and makes no account or workspace changes. General Ultrafast
-availability in the speed documentation does not prove this CLI account path
-supports it. Recheck the actual catalog and wire before extending the allowlist.
+For Ultrafast, select `serviceTier: 'ultrafast'` and supply
+`modelCatalogPath: '/srv/stage-chat/models.json'`. The catalog must advertise
+the exact selected model, reasoning effort and `ultrafast` tier. Fast maps
+to the catalog's `priority` tier. Supplying a catalog also checks the selected
+model and reasoning for default and Fast requests. Without a catalog, existing
+default and Fast behavior is unchanged and Ultrafast is rejected locally.
+
+The path must be absolute, readable, a regular file rather than a symlink,
+at most 4 MiB, and not writable by group or other users. Keep it outside the
+document root and uploads, under trusted application control. Use a static
+snapshot: the connector rechecks before starting any CLI process. A catalog
+that becomes missing or loses support produces a content-free `Unavailable`
+failure. The CLI reads the supplied file through `model_catalog_json`;
+the connector does not select a tier from a mutable home cache implicitly.
+
+Obtain the complete model records from the intended account's genuine CLI
+catalog after that account has been approved for the application. The following
+export preserves `models` and excludes the cache's account identity fields.
+It creates a new file; use a new deployment filename when refreshing a snapshot.
+
+```sh
+python3 -B - /srv/stage-chat/codex/models_cache.json /srv/stage-chat/models.json <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+models = json.loads(Path(sys.argv[1]).read_text())["models"]
+descriptor = os.open(sys.argv[2], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(descriptor, "w") as output:
+    json.dump({"models": models}, output)
+PY
+```
+
+The application owns catalog provenance. The connector validates the file and
+advertised capabilities; it cannot authenticate the catalog's issuer or prove
+account entitlement. Do not commit an account's catalog to the package.
+An existing auth file, `login status`, or a catalog snapshot does not prove
+successful provider authentication. Run the genuine-catalog wire probe, then
+an explicitly authorized synthetic provider completion under the approved
+service identity before serving application requests.
+
+On 2 October 2026, earlier service-home catalog snapshots omitted Ultrafast,
+and a direct request without an advertised tier silently omitted
+`service_tier`, including with the Fast feature disabled. A separate account's
+genuine metadata advertised Astra Max and Ultrafast. In an isolated probe,
+a native-cache copy did not select the tier; the explicit catalog path sent
+the exact `ultrafast` value. These checks establish catalog-dependent request
+behavior, not successful authentication or availability across accounts.
 
 Reasoning `ultra` is a separate mode that the tested catalogs describe as
 automatic task delegation. It remains rejected in this stateless connector.
@@ -120,6 +160,14 @@ tiers. It checks success and provider rejection at three concurrent requests,
 exact model, reasoning and tier, no tools, `store: false`, no retained content
 markers and empty known conversation tables. These are synthetic provider
 checks; they do not establish Max latency or authenticated provider acceptance.
+
+The 0.2.3 matrix also passed with a models-only export of genuine catalog
+metadata. Both tested hosts ran Sol/Low without a catalog using default and
+Fast, plus Astra/Max with the explicit catalog using default, Fast and Ultrafast.
+All 60 synthetic requests preserved exact selection, exposed no tools, sent
+`store: false`, and left no content markers or known conversation rows. Successful
+and rejected responses passed at three concurrent requests. No paid provider
+completion or account change was part of this package verification.
 
 ## What is retained
 
