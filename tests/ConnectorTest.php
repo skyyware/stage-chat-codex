@@ -158,6 +158,13 @@ final class ConnectorTest extends TestCase
         self::assertFileDoesNotExist($this->home . '/fixture.pid');
     }
 
+    public function testVerifiedCli160CanCompleteThroughTheConnector(): void
+    {
+        $options = new Options(__DIR__ . '/fixtures/codex-0.160.0.php', $this->work, $this->home, 'success', __DIR__ . '/fixtures/answer.json');
+        self::assertStringContainsString('Fixture response', new Codex($options)->complete($this->request())->text);
+        $this->assertChildStopped();
+    }
+
     public function testProfileDoesNotInheritApiCredentialsOrLoggingConfiguration(): void
     {
         $names = ['CODEX_API_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'RUST_LOG', 'OTEL_EXPORTER_OTLP_ENDPOINT'];
@@ -205,6 +212,53 @@ final class ConnectorTest extends TestCase
         self::assertSame([], array_filter($command, static fn (string $argument): bool => str_starts_with($argument, 'service_tier=')));
     }
 
+    #[DataProvider('maxServiceTiers')]
+    public function testMaxReasoningIsIndependentOfTheRequestedServiceTier(?string $tier): void
+    {
+        $options = new Options(
+            __DIR__ . '/fixtures/codex.php',
+            $this->work,
+            $this->home,
+            'gpt-6-astra',
+            __DIR__ . '/fixtures/answer.json',
+            reasoningEffort: 'max',
+            serviceTier: $tier,
+        );
+        $answer = json_decode(new Codex($options)->complete($this->request())->text, true, 32, JSON_THROW_ON_ERROR);
+        self::assertIsArray($answer);
+        self::assertIsArray($answer['argv']);
+        self::assertContains('gpt-6-astra', $answer['argv']);
+        self::assertContains('model_reasoning_effort="max"', $answer['argv']);
+        $settings = array_values(array_filter($answer['argv'], static fn (mixed $value): bool => is_string($value) && str_starts_with($value, 'service_tier=')));
+        self::assertSame($tier === null ? [] : ['service_tier="' . $tier . '"'], $settings);
+        if ($tier !== null) {
+            self::assertContains('features.fast_mode=true', $answer['argv']);
+        }
+        $this->assertChildStopped();
+    }
+
+    /** @return iterable<string, array{?string}> */
+    public static function maxServiceTiers(): iterable
+    {
+        yield 'default' => [null];
+        yield 'fast' => ['fast'];
+    }
+
+    #[DataProvider('unsupportedReasoningEfforts')]
+    public function testUnverifiedReasoningEffortsAreRejected(string $effort): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        new Options(__DIR__ . '/fixtures/codex.php', $this->work, $this->home, 'gpt-6-astra', __DIR__ . '/fixtures/answer.json', reasoningEffort: $effort);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function unsupportedReasoningEfforts(): iterable
+    {
+        foreach (['', 'MAX', 'ultrafast', 'ultra'] as $effort) {
+            yield $effort => [$effort];
+        }
+    }
+
     #[DataProvider('unsupportedServiceTiers')]
     public function testUnverifiedServiceTiersAreRejected(string $tier): void
     {
@@ -222,7 +276,7 @@ final class ConnectorTest extends TestCase
     /** @return iterable<string, array{string}> */
     public static function unsupportedServiceTiers(): iterable
     {
-        foreach (['', 'priority', 'ultrafast'] as $tier) {
+        foreach (['', 'priority', 'ultrafast', 'standard', 'turbo'] as $tier) {
             yield $tier => [$tier];
         }
     }

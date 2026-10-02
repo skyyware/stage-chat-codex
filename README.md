@@ -4,7 +4,7 @@ Use the Codex CLI as a stateless chat provider from PHP. Each request returns
 one JSON answer. There is no conversation database or shared agent session.
 PHP 8.4 or newer, macOS or Linux, MIT licensed.
 
-The current connector accepts Codex CLI 0.159.2 and 0.159.3. Other versions
+The current connector accepts Codex CLI 0.159.2, 0.159.3 and 0.160.0. Other versions
 fail before receiving conversation data. Run the wire probe for the deployed
 binary and model before serving requests. This is an initial release with a
 deliberately narrow execution profile.
@@ -15,12 +15,12 @@ Install the public package from
 [Packagist](https://packagist.org/packages/skyyware/stage-chat-codex):
 
 ```sh
-composer require skyyware/stage-chat-codex:^0.2.1
+composer require skyyware/stage-chat-codex:^0.2.2
 ```
 
 Composer also installs Stage Chat. No GitHub account, SSH identity, or VCS
-override is required. Commit the application's lockfile. Version 0.2.1
-preserves the 0.2.0 connector API; read [the changelog](CHANGELOG.md) before
+override is required. Commit the application's lockfile. Version 0.2.2
+adds Max reasoning and CLI 0.160.0 support; read [the changelog](CHANGELOG.md) before
 updating. Running real completions requires a separately installed, supported
 Codex CLI and an approved authenticated account.
 
@@ -65,7 +65,14 @@ does not switch models or retry with a different tier. Fast Mode requires
 account and model support and consumes more usage; see
 [availability and verification](docs/operations.md#fast-mode).
 
-For that example, `answer.schema.json` can contain:
+For GPT-6 Astra, select `model: 'gpt-6-astra', reasoningEffort: 'max'`.
+Max works independently of the default or Fast tier. The default reasoning
+remains `low`; verify the selected model's support with the wire probe.
+`ultrafast` remains rejected: the tested CLI catalogs do not advertise it,
+and passing that setting directly to the CLI silently omits the tier.
+See [reasoning and Ultrafast limits](docs/operations.md#reasoning-and-ultrafast).
+
+For that example, `answer.json` can contain:
 
 ```json
 {
@@ -106,6 +113,8 @@ composer install
 composer check
 python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6.1-sol --concurrency 3
 python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6.1-sol --service-tier fast --concurrency 3
+python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6-astra --reasoning-effort max --concurrency 3
+python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6-astra --reasoning-effort max --service-tier fast --concurrency 3
 ```
 
 `composer check` exercises real subprocess pipes with a local fake CLI,

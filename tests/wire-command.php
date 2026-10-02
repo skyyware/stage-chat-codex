@@ -10,11 +10,11 @@ use Stage\Chat\Message;
 use Stage\Chat\Request;
 use Stage\Chat\Role;
 
-if (count($argv) !== 5 && count($argv) !== 6) {
+if (count($argv) !== 5 && count($argv) !== 6 && count($argv) !== 7) {
     exit(2);
 }
 
-$options = new Options($argv[1], $argv[2] . '/work', $argv[2] . '/codex', $argv[3], __DIR__ . '/fixtures/answer.json', serviceTier: $argv[5] ?? null);
+$options = new Options($argv[1], $argv[2] . '/work', $argv[2] . '/codex', $argv[3], __DIR__ . '/fixtures/answer.json', reasoningEffort: $argv[6] ?? 'low', serviceTier: ($argv[5] ?? '') === '' ? null : $argv[5]);
 $profile = new Profile($options);
 $request = new Request('Return the supplied marker as the answer.', $argv[4], [new Message(Role::User, 'What is the marker?')]);
 

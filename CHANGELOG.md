@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.2 — 2026-10-02
+
+`Options::$reasoningEffort` also accepts `max`. GPT-6 Astra sends Max independently
+of the default or explicit Fast tier. Codex CLI 0.160.0 joins the supported
+0.159.2 and 0.159.3 versions. Existing defaults and process limits are unchanged.
+
+Ultrafast remains rejected locally. The tested authenticated catalogs on
+0.159.3 and 0.160.0 advertise Fast but no Ultrafast tier; the CLI silently omits
+an unadvertised tier. The connector does not replace catalog metadata or
+substitute a different tier. Reasoning `ultra` remains rejected.
+
+The wire probe accepts an explicit reasoning effort and checks the exact
+outbound value. Default and Fast probes with Sol/Low and Astra/Max verify
+success, rejection, three concurrent processes and the existing privacy profile.
+
 ## 0.2.1 — 2026-10-01
 
 Public Packagist installation replaces private VCS configuration. Operational

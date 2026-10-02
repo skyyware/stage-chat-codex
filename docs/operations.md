@@ -63,10 +63,8 @@ provider-specific setting is added to the `Stage\Chat\Connector` contract.
 The [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
 and [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
 describe this mapping and its availability. Fast Mode depends on model, account,
-client and workspace access. At the 1 October 2026 check, the documentation
-listed increased usage: 2.5 times included subscription usage or twice the
-Standard rate for purchased credits and Enterprise pay-as-you-go usage.
-Recheck the account's current terms rather than treating those rates as fixed.
+client and workspace access. It consumes more usage than Standard mode.
+Check the account's current terms in the speed documentation.
 No account or subscription changes are performed by this package.
 
 An invalid local tier fails at configuration time. A provider rejection becomes
@@ -92,6 +90,36 @@ completion, not production capacity, a latency percentile, source correctness,
 or provider retention. The interface does not report the provider's served
 model or tier. Verify the real application and host separately after a runtime
 change; keep that evidence with the application.
+
+## Reasoning and Ultrafast
+
+Set `model: 'gpt-6-astra', reasoningEffort: 'max'` to request Max reasoning.
+Keep `serviceTier: null` for the default tier or select `serviceTier: 'fast'`.
+Reasoning and speed are independent; the existing default remains `low`.
+Use a reasoning level advertised by the selected model and verify its exact
+request value with `--reasoning-effort` in the wire probe.
+
+On 2 October 2026, the authenticated model catalogs for the tested macOS
+CLI 0.160.0 and Linux CLI 0.159.3 advertised Astra Max and the `priority` tier,
+but no `ultrafast` tier. A direct Ultrafast request silently omitted
+`service_tier`, including with the Fast feature disabled. The configuration
+reference requires a tier advertised by the active model. The package therefore
+rejects `ultrafast` before starting a completion. It supplies no replacement
+catalog and makes no account or workspace changes. General Ultrafast
+availability in the speed documentation does not prove this CLI account path
+supports it. Recheck the actual catalog and wire before extending the allowlist.
+
+Reasoning `ultra` is a separate mode that the tested catalogs describe as
+automatic task delegation. It remains rejected in this stateless connector.
+
+The 0.2.2 wire matrix passed on macOS with direct CLI 0.160.0 and on Linux
+with direct CLI 0.159.3 under the application's unprivileged service identity.
+The tested source and schema matched the package checkout. It uses Sol/Low
+and Astra/Max, each with the default and Fast
+tiers. It checks success and provider rejection at three concurrent requests,
+exact model, reasoning and tier, no tools, `store: false`, no retained content
+markers and empty known conversation tables. These are synthetic provider
+checks; they do not establish Max latency or authenticated provider acceptance.
 
 ## What is retained
 

@@ -29,7 +29,7 @@ final readonly class Codex implements Connector
             [$this->options->binary, '--version'], '', $profile->environment(), $this->options->workingDirectory,
             $deadline, 1024, static function (string $chunk) use (&$version): void { $version .= $chunk; }, $cancelled,
         );
-        if (!in_array(trim($version), ['codex-cli 0.159.2', 'codex-cli 0.159.3'], true)) {
+        if (!in_array(trim($version), ['codex-cli 0.159.2', 'codex-cli 0.159.3', 'codex-cli 0.160.0'], true)) {
             throw new Failure(FailureReason::Unavailable);
         }
 

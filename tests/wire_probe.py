@@ -12,7 +12,7 @@ import threading
 import uuid
 
 
-def run(binary, php, model, service_tier, concurrency, provider_error):
+def run(binary, php, model, service_tier, reasoning_effort, concurrency, provider_error):
     package = Path(__file__).resolve().parent.parent
     runtime = package / ".runtime"
     runtime.mkdir(mode=0o700, exist_ok=True)
@@ -42,7 +42,7 @@ def run(binary, php, model, service_tier, concurrency, provider_error):
                     self.wfile.write(json.dumps({"error": {
                         "message": response_marker,
                         "type": "invalid_request_error",
-                        "code": "unsupported_service_tier" if service_tier == "fast" else "fixture_error",
+                        "code": "unsupported_service_tier" if service_tier is not None else "fixture_error",
                     }}).encode())
                     return
                 message = {
@@ -86,8 +86,7 @@ def run(binary, php, model, service_tier, concurrency, provider_error):
             arguments = [
                 php, str(package / "tests" / "wire-command.php"), binary, str(root), model, request_marker,
             ]
-            if service_tier is not None:
-                arguments.append(service_tier)
+            arguments.extend([service_tier or "", reasoning_effort])
             specification = json.loads(subprocess.check_output(arguments, timeout=10))
             if request_marker in json.dumps(specification["command"]):
                 raise RuntimeError("Conversation leaked into arguments")
@@ -135,8 +134,8 @@ def run(binary, php, model, service_tier, concurrency, provider_error):
             if request.get("model") != model:
                 raise RuntimeError("Requested model changed")
             if request.get("service_tier") != ("priority" if service_tier == "fast" else None):
-                raise RuntimeError("Requested service tier changed")
-            if request.get("reasoning", {}).get("effort") != "low":
+                raise RuntimeError("Requested service tier changed: " + json.dumps({"requested": service_tier, "observed": request.get("service_tier")}))
+            if request.get("reasoning", {}).get("effort") != reasoning_effort:
                 raise RuntimeError("Reasoning effort changed")
             if request.get("tools") not in (None, []) or request.get("store") is not False:
                 raise RuntimeError("Tools or provider response storage enabled")
@@ -168,7 +167,7 @@ def run(binary, php, model, service_tier, concurrency, provider_error):
                 connection.close()
         version = subprocess.check_output([binary, "--version"], text=True, timeout=5).strip()
         print(json.dumps({"cli": version, "model": model, "service_tier": captured[0].get("service_tier"),
-                          "reasoning_effort": "low", "requests": len(captured), "tools": 0,
+                          "reasoning_effort": captured[0].get("reasoning", {}).get("effort"), "requests": len(captured), "tools": 0,
                           "response_storage": False, "content_markers_on_disk": 0, "content_rows": 0, "concurrency": concurrency,
                           "scenario": "provider-error" if provider_error else "success", "provider": "local synthetic fixture"}))
 
@@ -178,7 +177,8 @@ parser.add_argument("--binary", default=shutil.which("codex"), required=shutil.w
 parser.add_argument("--php", default=shutil.which("php"), required=shutil.which("php") is None)
 parser.add_argument("--model", required=True)
 parser.add_argument("--service-tier", choices=["fast"])
+parser.add_argument("--reasoning-effort", choices=["none", "minimal", "low", "medium", "high", "max"], default="low")
 parser.add_argument("--concurrency", type=int, choices=range(1, 4), default=1)
 arguments = parser.parse_args()
 for provider_error in [False, True]:
-    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.concurrency, provider_error)
+    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.reasoning_effort, arguments.concurrency, provider_error)

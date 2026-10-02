@@ -39,7 +39,7 @@ final readonly class Options
             throw new InvalidArgumentException('Codex model identifier is invalid.');
         }
 
-        if (!in_array($reasoningEffort, ['none', 'minimal', 'low', 'medium', 'high'], true)) {
+        if (!in_array($reasoningEffort, ['none', 'minimal', 'low', 'medium', 'high', 'max'], true)) {
             throw new InvalidArgumentException('Codex reasoning effort is invalid.');
         }
 
