@@ -13,6 +13,12 @@ configuration, prompts, answers, subprocess stderr, or provider traces.
 6. Run `composer check`. For profile, model, or CLI changes, also run the documented synthetic wire probe on the target binary and host.
 7. Open a focused pull request with the problem, resulting behavior, and checks performed.
 
+For behavior, API, requirements, or usage changes, review the package docs and
+executable examples together. Identify affected technical guidance on
+[stage.dev](https://stage.dev/). Maintainers coordinate its curated knowledge
+update in the same delivery under [RELEASING.md](RELEASING.md).
+You do not need access to the website repository to contribute.
+
 The fake CLI and wire probe do not need an account or paid model call. Keep
 their assertions intact. An authenticated smoke test needs separate, explicit
 synthetic-input scope. Do not introduce tools, arbitrary CLI arguments,

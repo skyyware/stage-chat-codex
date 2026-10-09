@@ -3,6 +3,11 @@
 Follow the [Stage package release workflow](https://github.com/skyyware/stage/blob/main/docs/releases.md).
 This repository owns `skyyware/stage-chat-codex` and its fixed CLI adapter.
 
+Review package docs, executable examples, and affected stage.dev curated
+articles in the same delivery. Follow the shared
+[documentation and Starchat knowledge review](https://github.com/skyyware/stage/blob/main/docs/releases.md#review-documentation-and-starchat-knowledge)
+for source mappings, installation ownership, and verification.
+
 Run `composer check`. A profile, model, or supported CLI change also needs
 the documented default and Fast wire probes on the target binary and host,
 with success, rejection, and concurrency checks. Added reasoning levels need
