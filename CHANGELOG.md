@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.4 — 2026-11-13
+
+Codex CLI 0.167.0 joins the existing verified version allowlist. The connector
+keeps the same API, model selection, reasoning and speed defaults, execution
+profile, authentication boundary, process limits and failure categories.
+Other unverified versions still fail before receiving conversation data.
+
+The synthetic wire probe now decodes actual CLI output through the connector's
+event decoder. Default and Fast requests passed success and rejection at three
+concurrent requests on macOS with CLI 0.167.0, Luna/Low and PHP 8.4.27, without
+tools, provider response storage or retained conversation markers. No real
+provider completion or account change was part of this compatibility check.
+
+The blocked-stdin test now leaves time for both PHP process startups while
+retaining a strict deadline and child-reaping checks. Documentation distinguishes
+the process deadline from configuration work and operating-system cleanup.
+
 ## 0.2.3 — 2026-10-02
 
 `Options::$modelCatalogPath` accepts a protected static CLI catalog file.

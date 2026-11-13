@@ -1,5 +1,6 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import http.server
 import json
 import os
@@ -130,6 +131,15 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
                 raise RuntimeError("Expected answer or provider failure missing")
             if any(other in result.stdout for other in markers.values() if other != response_marker):
                 raise RuntimeError("Cross-request answer leakage")
+            decoded = json.loads(subprocess.check_output(
+                [php, str(package / "tests" / "wire-response.php")],
+                input=result.stdout, text=True, timeout=5,
+            ))
+            expected = {"status": "failure", "reason": "unavailable"} if provider_error else {
+                "status": "complete", "answer_sha256": hashlib.sha256(response_marker.encode()).hexdigest(),
+            }
+            if decoded != expected:
+                raise RuntimeError("Connector could not decode the CLI response")
         for request in captured:
             if request.get("model") != model:
                 raise RuntimeError("Requested model changed")
@@ -169,6 +179,7 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
         print(json.dumps({"cli": version, "model": model, "service_tier": captured[0].get("service_tier"),
                           "reasoning_effort": captured[0].get("reasoning", {}).get("effort"), "requests": len(captured), "tools": 0,
                           "response_storage": False, "content_markers_on_disk": 0, "content_rows": 0, "concurrency": concurrency,
+                          "connector_decoder": "verified",
                           "scenario": "provider-error" if provider_error else "success", "provider": "local synthetic fixture"}))
 
 

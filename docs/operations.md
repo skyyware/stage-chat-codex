@@ -36,6 +36,16 @@ PHP must permit `proc_open` and access these paths. Give the web server and PHP
 worker longer deadlines than the configured connector timeout, including time
 to render an error. The default connector deadline is 25 seconds.
 
+The monotonic process deadline is shared by the version check and completion.
+Options and catalog validation precede it. A cancellation callback is checked
+before spawning and during nonblocking pipe polling; it must not block. On
+failure, timeout or cancellation, cleanup terminates the direct child with
+SIGTERM, waits up to 200 ms, then uses SIGKILL if necessary and reaps it.
+Operating-system cleanup can extend elapsed time beyond the configured deadline.
+The connector does not supervise descendants or survive an external SIGKILL
+of its PHP parent. Multi-call workflows need their own overall deadline and
+remaining budget for each call, including cleanup.
+
 Use an application concurrency limit before starting the CLI. Every request
 launches a process and occupies a PHP worker until completion. The application
 owns rate limits and admission control. If using a client-disconnect callback,
@@ -168,6 +178,29 @@ All 60 synthetic requests preserved exact selection, exposed no tools, sent
 `store: false`, and left no content markers or known conversation rows. Successful
 and rejected responses passed at three concurrent requests. No paid provider
 completion or account change was part of this package verification.
+
+### CLI 0.167.0 compatibility
+
+On 13 November 2026, the unchanged profile passed on macOS with the direct
+Codex CLI 0.167.0 executable, PHP 8.4.27 and GPT-6 Luna/Low. The default and
+Fast tiers each passed success and provider-rejection cases at three concurrent
+requests. All twelve synthetic requests preserved the model and reasoning,
+exposed no tools, sent `store: false`, and left no request or answer markers
+or known conversation rows. Fast sent `priority`.
+
+The probe also passes the real CLI event stream through the connector's
+`Events` decoder, checking the answer digest or sanitized failure category.
+These checks use a local synthetic provider and isolated temporary directories;
+they establish neither authentication nor provider entitlement, latency or
+dictionary correctness. Existing authenticated service homes were not used.
+The package's fake-CLI tests cover accepted and rejected versions, cancellation,
+blocked stdin, output bounds and child cleanup.
+
+The blocked-stdin test uses a one-second deadline and requires completion in
+under two seconds against a five-second fixture. Its previous 250 ms budget
+could expire during the two PHP process startups before the blocking fixture
+started. The test still requires the fixture's PID and verifies that child is
+reaped; the production deadline and cleanup behavior are unchanged.
 
 ## What is retained
 

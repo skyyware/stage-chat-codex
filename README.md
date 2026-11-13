@@ -4,7 +4,7 @@ Use the Codex CLI as a stateless chat provider from PHP. Each request returns
 one JSON answer. There is no conversation database or shared agent session.
 PHP 8.4 or newer, macOS or Linux, MIT licensed.
 
-The current connector accepts Codex CLI 0.159.2, 0.159.3 and 0.160.0. Other versions
+The current connector accepts Codex CLI 0.159.2, 0.159.3, 0.160.0 and 0.167.0. Other versions
 fail before receiving conversation data. Run the wire probe for the deployed
 binary and model before serving requests. This is an initial release with a
 deliberately narrow execution profile.
@@ -15,12 +15,12 @@ Install the public package from
 [Packagist](https://packagist.org/packages/skyyware/stage-chat-codex):
 
 ```sh
-composer require skyyware/stage-chat-codex:^0.2.3
+composer require skyyware/stage-chat-codex:^0.2.4
 ```
 
 Composer also installs Stage Chat. No GitHub account, SSH identity, or VCS
-override is required. Commit the application's lockfile. Version 0.2.3
-adds Ultrafast selection through a trusted model catalog; read
+override is required. Commit the application's lockfile. Version 0.2.4
+adds Codex CLI 0.167.0 compatibility without changing the execution profile; read
 [the changelog](CHANGELOG.md) before updating. Running real completions requires a separately installed, supported
 Codex CLI and an approved authenticated account.
 
@@ -102,8 +102,12 @@ The optional cancellation closure returns `true` to stop a request. Catch
 `Cancelled` or `InvalidResponse`. Messages contain no provider payload. Never
 log request objects, raw subprocess output or exception traces.
 
-The timeout covers startup, the CLI version check and completion. Output and
-stderr together are limited to 256 KiB by default. The connector starts no shell,
+The process deadline covers startup, the CLI version check and completion.
+Configuration and catalog validation happen before that deadline. Cancellation callbacks must
+return promptly. Cleanup sends SIGTERM to the direct child, waits up to 200 ms,
+then sends SIGKILL if needed and reaps it. This is not a hard real-time or
+process-tree termination guarantee. Allow cleanup time in the caller's deadline.
+Output and stderr together are limited to 256 KiB by default. The connector starts no shell,
 exposes no configurable tools, discards stderr and terminates the child on
 cancellation, timeout or malformed output. It returns a final answer rather
 than streaming partial text.
@@ -131,7 +135,8 @@ level. The tests need PHP's POSIX extension.
 
 The Python probe runs the actual CLI against a local synthetic server. It needs
 no account or model call. It verifies the exact model, service tier and reasoning
-effort. It also checks that the request has no tools, response storage is disabled,
+effort. It decodes the actual CLI output with the connector's event decoder.
+It also checks that the request has no tools, response storage is disabled,
 personal configuration is ignored, context stays in the user data,
 the JSON answer arrives and no prompt or answer marker appears in the temporary
 CLI home. It checks successful and failed provider responses, known conversation

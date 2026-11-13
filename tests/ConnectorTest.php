@@ -109,12 +109,12 @@ final class ConnectorTest extends TestCase
         $request = new Request('Policy', str_repeat('x', 120000), [new Message(Role::User, 'Question')]);
         $started = hrtime(true);
         try {
-            new Codex($this->options('no-read', 0.25))->complete($request);
+            new Codex($this->options('no-read', 1.0))->complete($request);
             self::fail('Expected timeout.');
         } catch (Failure $failure) {
             self::assertSame(FailureReason::Timeout, $failure->reason);
         }
-        self::assertLessThan(1.0, (hrtime(true) - $started) / 1e9);
+        self::assertLessThan(2.0, (hrtime(true) - $started) / 1e9);
         $this->assertChildStopped();
     }
 
@@ -158,11 +158,19 @@ final class ConnectorTest extends TestCase
         self::assertFileDoesNotExist($this->home . '/fixture.pid');
     }
 
-    public function testVerifiedCli160CanCompleteThroughTheConnector(): void
+    #[DataProvider('verifiedVersions')]
+    public function testVerifiedCliVersionsCanCompleteThroughTheConnector(string $fixture): void
     {
-        $options = new Options(__DIR__ . '/fixtures/codex-0.160.0.php', $this->work, $this->home, 'success', __DIR__ . '/fixtures/answer.json');
+        $options = new Options(__DIR__ . '/fixtures/' . $fixture, $this->work, $this->home, 'success', __DIR__ . '/fixtures/answer.json');
         self::assertStringContainsString('Fixture response', new Codex($options)->complete($this->request())->text);
         $this->assertChildStopped();
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function verifiedVersions(): iterable
+    {
+        yield '0.160.0' => ['codex-0.160.0.php'];
+        yield '0.167.0' => ['codex-0.167.0.php'];
     }
 
     public function testProfileDoesNotInheritApiCredentialsOrLoggingConfiguration(): void
