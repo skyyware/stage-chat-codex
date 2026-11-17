@@ -61,6 +61,60 @@ in the CLI home. This does not exercise an expired-credential refresh race or
 establish capacity beyond three workers. Repeat the three-request probe on the
 deployment host before using this arrangement there.
 
+## Image lifecycle
+
+`Codex::complete($request, image: new JpegImage($jpegBytes))` attaches one JPEG
+through the CLI's `--image` option. The `view_image` tool remains disabled, as
+do all other tools. The model receives the image as untrusted user input.
+The existing text-only command and stdin format remain unchanged.
+
+The value object checks a 4 MiB encoded-byte limit, a 4096-pixel side limit,
+a 4,194,304-pixel total limit and successful GD decoding. Image callers need
+PHP's GD extension; existing text callers do not. Validation happens when
+constructing `JpegImage`, outside the completion's process deadline. The
+application owns any stricter upload limits, metadata removal, frame extraction,
+resizing, and selection of content approved for the provider.
+
+After checking the CLI version, the connector creates a random mode-0700
+directory in PHP's `sys_get_temp_dir()` and writes a mode-0600 `input.jpg`.
+Only this generated path is passed in command arguments. Images do not enter
+the empty working directory or Codex home. Give the service an appropriate
+off-web, off-backup temporary location through its PHP configuration or `TMPDIR`.
+Budget space for at most one 4 MiB image per admitted request.
+
+The file and directory are removed after success, provider errors, malformed
+output, cancellation and timeout, after direct-child cleanup. A file creation,
+write or cleanup failure reports `Unavailable` without exposing its content.
+An OS kill, PHP crash or power loss can bypass cleanup. The application owns
+recovery of abandoned files in its private runtime and must avoid removing
+files belonging to active requests. This package starts no cleanup job.
+
+The original JPEG bytes, including any embedded metadata, reach the provider.
+Do not log the object, byte string, temporary file, raw event stream or traces.
+The CLI still has its documented metadata behavior. Neither local cleanup nor
+`store: false` establishes zero retention by the provider or host.
+
+Run the wire probe with `--image` under the deployed identity using default
+and Fast tiers. It sends synthetic color panels to a local test server, checks
+exact image bytes and request isolation, and checks for retained image content
+in the temporary CLI home. It uses no authenticated account and cannot prove
+visual understanding or entitlement. Before enabling real image input, separately
+verify the application's approved account with a synthetic image and its actual
+answer schema. Never borrow another service's credentials for this check.
+
+On 17 November 2026, text and image wire matrices passed on macOS with CLI
+0.167.0 and Linux with CLI 0.159.3, PHP 8.4.27 and Luna/Low. Each host checked
+default and Fast tiers, success and rejection, and three concurrent requests.
+The 48 synthetic requests preserved exact selection, exposed no tools, sent
+`store: false`, and left no content markers or known conversation rows.
+Image cases also preserved each request's exact JPEG bytes and left no image
+payloads in the CLI home. Linux used an isolated unprivileged identity; deployment
+identity and authenticated image acceptance remain application checks.
+
+The PHP subprocess tests verify mode-0700 directories, mode-0600 image files,
+exact bytes, an unchanged empty working directory, child reaping and file
+removal for success, failure, malformed output, timeout and cancellation.
+
 ## Fast Mode
 
 The application selects `model: 'gpt-6.1-sol', serviceTier: 'fast'` in `Options`.

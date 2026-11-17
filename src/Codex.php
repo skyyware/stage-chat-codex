@@ -20,7 +20,7 @@ final readonly class Codex implements Connector
     }
 
     /** @param (Closure(): bool)|null $cancelled */
-    public function complete(#[SensitiveParameter] Request $request, #[SensitiveParameter] ?Closure $cancelled = null): Response
+    public function complete(#[SensitiveParameter] Request $request, #[SensitiveParameter] ?Closure $cancelled = null, #[SensitiveParameter] ?JpegImage $image = null): Response
     {
         try {
             ModelCatalog::verify($this->options);
@@ -39,12 +39,17 @@ final readonly class Codex implements Connector
             throw new Failure(FailureReason::Unavailable);
         }
 
-        $events = new Events();
-        $process->run(
-            $profile->command($request), $profile->input($request), $profile->environment(), $this->options->workingDirectory,
-            $deadline, $this->options->maxOutputBytes, $events->receive(...), $cancelled,
-        );
+        $file = $image === null ? null : ImageFile::create($image);
+        try {
+            $events = new Events();
+            $process->run(
+                $profile->command($request, $file?->path), $profile->input($request), $profile->environment(), $this->options->workingDirectory,
+                $deadline, $this->options->maxOutputBytes, $events->receive(...), $cancelled,
+            );
 
-        return $events->response();
+            return $events->response();
+        } finally {
+            $file?->close();
+        }
     }
 }

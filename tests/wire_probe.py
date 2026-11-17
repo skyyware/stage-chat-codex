@@ -1,4 +1,5 @@
 import argparse
+import base64
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import http.server
@@ -13,7 +14,7 @@ import threading
 import uuid
 
 
-def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, concurrency, provider_error):
+def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, concurrency, provider_error, image):
     package = Path(__file__).resolve().parent.parent
     runtime = package / ".runtime"
     runtime.mkdir(mode=0o700, exist_ok=True)
@@ -83,15 +84,22 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
         (root / "codex").mkdir(mode=0o700)
         (root / "codex" / "config.toml").write_text('developer_instructions = "UNEXPECTED_USER_CONFIG_SENTINEL"\n')
         specifications = []
-        for request_marker in markers:
+        image_digests = {}
+        for index, request_marker in enumerate(markers):
             arguments = [
                 php, str(package / "tests" / "wire-command.php"), binary, str(root), model, request_marker,
             ]
             arguments.extend([service_tier or "", reasoning_effort, model_catalog_path or ""])
+            if image:
+                arguments.extend([str(root / ("image-" + str(index) + ".jpg")), str(index * 8)])
             specification = json.loads(subprocess.check_output(arguments, timeout=10))
             if request_marker in json.dumps(specification["command"]):
                 raise RuntimeError("Conversation leaked into arguments")
             specifications.append(specification)
+            image_digests[request_marker] = specification["image_sha256"]
+
+        if image and len(set(image_digests.values())) != concurrency:
+            raise RuntimeError("Synthetic image fixtures must differ between requests")
 
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -105,12 +113,11 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
             "model_providers.stage_probe.request_max_retries": 0,
             "model_providers.stage_probe.stream_max_retries": 0,
         }
-        command = specifications[0]["command"][:-1]
-        for key, value in overrides.items():
-            command.extend(["-c", key + "=" + json.dumps(value)])
-        command.append("-")
-
         def complete(specification):
+            command = specification["command"][:-1]
+            for key, value in overrides.items():
+                command.extend(["-c", key + "=" + json.dumps(value)])
+            command.append("-")
             return subprocess.run(command, input=specification["input"], text=True, capture_output=True,
                                   cwd=root / "work", env=specification["environment"], timeout=25)
 
@@ -140,6 +147,7 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
             }
             if decoded != expected:
                 raise RuntimeError("Connector could not decode the CLI response")
+        image_payloads = []
         for request in captured:
             if request.get("model") != model:
                 raise RuntimeError("Requested model changed")
@@ -157,11 +165,28 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
             for item in request.get("input", []):
                 if item.get("role") != "user" and any(marker in json.dumps(item) for marker in markers):
                     raise RuntimeError("Source context promoted to trusted instructions")
+            attachments = [(item.get("role"), part) for item in request.get("input", [])
+                           for part in item.get("content", []) if isinstance(part, dict) and part.get("type") == "input_image"]
+            if len(attachments) != (1 if image else 0):
+                raise RuntimeError("Unexpected image attachment count")
+            for role, attachment in attachments:
+                url = attachment.get("image_url", "")
+                prefix = "data:image/jpeg;base64,"
+                if role != "user" or not url.startswith(prefix):
+                    raise RuntimeError("Image was not supplied as untrusted JPEG data")
+                payload = url[len(prefix):]
+                digest = hashlib.sha256(base64.b64decode(payload, validate=True)).hexdigest()
+                marker = next(marker for marker in markers if marker in encoded)
+                if digest != image_digests[marker]:
+                    raise RuntimeError("Image content changed or crossed requests")
+                image_payloads.append(payload)
         for file in root.rglob("*"):
             if file.is_file() and not file.is_symlink():
                 data = file.read_bytes()
                 if any(marker.encode() in data for marker in [*markers, *markers.values()]):
                     raise RuntimeError("Conversation marker persisted in " + str(file.relative_to(root)))
+                if root / "codex" in file.parents and any(payload.encode() in data or base64.b64decode(payload) in data for payload in image_payloads):
+                    raise RuntimeError("Image content persisted in CLI home")
         content_tables = {"threads", "logs", "stage1_outputs", "queued_items", "queued_thread_revisions", "thread_goals"}
         for file in (root / "codex").glob("*.sqlite"):
             connection = sqlite3.connect("file:" + str(file) + "?mode=rw", uri=True)
@@ -180,6 +205,8 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
                           "reasoning_effort": captured[0].get("reasoning", {}).get("effort"), "requests": len(captured), "tools": 0,
                           "response_storage": False, "content_markers_on_disk": 0, "content_rows": 0, "concurrency": concurrency,
                           "connector_decoder": "verified",
+                          "images_per_request": 1 if image else 0,
+                          "image_content": "verified" if image else "absent",
                           "scenario": "provider-error" if provider_error else "success", "provider": "local synthetic fixture"}))
 
 
@@ -191,6 +218,7 @@ parser.add_argument("--service-tier", choices=["fast", "ultrafast"])
 parser.add_argument("--reasoning-effort", choices=["none", "minimal", "low", "medium", "high", "max"], default="low")
 parser.add_argument("--model-catalog", type=os.path.abspath)
 parser.add_argument("--concurrency", type=int, choices=range(1, 4), default=1)
+parser.add_argument("--image", action="store_true")
 arguments = parser.parse_args()
 for provider_error in [False, True]:
-    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.reasoning_effort, arguments.model_catalog, arguments.concurrency, provider_error)
+    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.reasoning_effort, arguments.model_catalog, arguments.concurrency, provider_error, arguments.image)

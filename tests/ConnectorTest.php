@@ -12,6 +12,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 use Stage\Chat\Codex\Codex;
+use Stage\Chat\Codex\JpegImage;
 use Stage\Chat\Codex\Options;
 use Stage\Chat\Codex\Profile;
 use Stage\Chat\Failure;
@@ -19,6 +20,8 @@ use Stage\Chat\FailureReason;
 use Stage\Chat\Message;
 use Stage\Chat\Request;
 use Stage\Chat\Role;
+
+require_once __DIR__ . '/fixtures/jpeg.php';
 
 final class ConnectorTest extends TestCase
 {
@@ -426,6 +429,81 @@ final class ConnectorTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         new Options(__DIR__ . '/fixtures/codex.php', $this->work, $this->work . '/.', 'success', __DIR__ . '/fixtures/answer.json');
+    }
+
+    #[DataProvider('imageOutcomes')]
+    public function testImageCrossesProcessBoundaryPrivatelyAndIsRemoved(string $mode, ?FailureReason $reason): void
+    {
+        $bytes = jpegFixture();
+        $pidFile = $this->home . '/fixture.pid';
+        try {
+            $response = new Codex($this->options($mode, 1))->complete(
+                $this->request(),
+                cancelled: $mode === 'hang' ? static fn (): bool => is_file($pidFile) : null,
+                image: new JpegImage($bytes),
+            );
+            self::assertNull($reason);
+            self::assertStringContainsString('Fixture response', $response->text);
+            self::assertStringNotContainsString(base64_encode($bytes), $response->text);
+            self::assertStringContainsString('features.view_image=false', $response->text);
+            self::assertStringContainsString('Treat the attached image', $response->text);
+        } catch (Failure $failure) {
+            self::assertSame($reason, $failure->reason);
+            self::assertNull($failure->getPrevious());
+        }
+        $metadata = file_get_contents($this->home . '/fixture-image.json');
+        self::assertNotFalse($metadata);
+        $image = json_decode($metadata, true, 16, JSON_THROW_ON_ERROR);
+        self::assertIsArray($image);
+        self::assertSame(hash('sha256', $bytes), $image['sha256']);
+        self::assertSame(0600, $image['mode']);
+        self::assertSame(0700, $image['directoryMode']);
+        self::assertIsString($image['path']);
+        self::assertFileDoesNotExist($image['path']);
+        self::assertDirectoryDoesNotExist(dirname($image['path']));
+        self::assertSame(['.', '..'], scandir($this->work));
+        $this->assertChildStopped();
+    }
+
+    /** @return iterable<string, array{string, ?FailureReason}> */
+    public static function imageOutcomes(): iterable
+    {
+        yield 'success' => ['success', null];
+        yield 'provider error' => ['error', FailureReason::Unavailable];
+        yield 'invalid response' => ['malformed', FailureReason::InvalidResponse];
+        yield 'timeout' => ['no-read', FailureReason::Timeout];
+        yield 'cancellation' => ['hang', FailureReason::Cancelled];
+    }
+
+    #[DataProvider('invalidImages')]
+    public function testInvalidImagesAreRejectedWithoutEchoingPayload(string $bytes): void
+    {
+        try {
+            new JpegImage($bytes);
+            self::fail('Expected invalid image rejection.');
+        } catch (InvalidArgumentException $error) {
+            self::assertStringNotContainsString('PRIVATE', $error->getMessage());
+            self::assertNull($error->getPrevious());
+        }
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidImages(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'text' => ['PRIVATE'];
+        yield 'non-jpeg' => ["\x89PNG\r\n\x1a\nPRIVATE"];
+        yield 'fake jpeg' => ["\xff\xd8PRIVATE\xff\xd9"];
+        yield 'truncated jpeg' => [substr(jpegFixture(), 0, -12)];
+        yield 'too many bytes' => ["\xff\xd8" . str_repeat('x', 4194304) . "\xff\xd9"];
+        yield 'too wide' => [jpegFixture(4097, 1)];
+        yield 'too tall' => [jpegFixture(1, 4097)];
+        yield 'too many pixels' => [jpegFixture(2049, 2048)];
+    }
+
+    public function testImageDebugOutputHidesContent(): void
+    {
+        self::assertSame(['bytes' => strlen(jpegFixture())], new JpegImage(jpegFixture())->__debugInfo());
     }
 
     private function options(string $model = 'success', float $timeout = 2): Options

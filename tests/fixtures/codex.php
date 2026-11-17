@@ -15,6 +15,16 @@ if ($directory === false) {
     exit(9);
 }
 file_put_contents($directory . '/fixture.pid', (string) getmypid());
+$imageIndex = array_search('--image', $argv, true);
+if ($imageIndex !== false) {
+    $path = $argv[$imageIndex + 1];
+    file_put_contents($directory . '/fixture-image.json', json_encode([
+        'path' => $path,
+        'sha256' => hash_file('sha256', $path),
+        'mode' => fileperms($path) & 0777,
+        'directoryMode' => fileperms(dirname($path)) & 0777,
+    ], JSON_THROW_ON_ERROR));
+}
 
 if ($mode === 'hang' || $mode === 'no-read') {
     sleep(5);

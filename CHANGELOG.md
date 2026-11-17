@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0 — 2026-11-17
+
+`Codex::complete` accepts an optional named `image` argument containing a
+`JpegImage`. Existing text calls and their cancellation argument are unchanged.
+The adapter accepts one decodable JPEG up to 4 MiB, 4096 pixels per side and
+4,194,304 pixels total. GD is required only for image validation. The shared
+Stage Chat request and connector contracts remain unchanged.
+
+The CLI receives the image through a private temporary file and treats it as
+untrusted input. All tools stay disabled. The file is removed after completion,
+provider failure, malformed output, cancellation or timeout. Unexpected process
+death can bypass cleanup; applications own recovery and provider authorization.
+Original image bytes, including metadata, are sent unchanged.
+
+Local checks cover validation, permissions, exact image bytes, cleanup and
+unchanged text behavior. The wire probe adds `--image` to verify image isolation,
+tool-free requests, disabled response storage and absence of retained content
+against a local synthetic provider. No account credentials or real provider
+calls are used for these checks.
+
 ## 0.2.4 — 2026-11-13
 
 Codex CLI 0.167.0 joins the existing verified version allowlist. The connector

@@ -15,12 +15,12 @@ Install the public package from
 [Packagist](https://packagist.org/packages/skyyware/stage-chat-codex):
 
 ```sh
-composer require skyyware/stage-chat-codex:^0.2.4
+composer require skyyware/stage-chat-codex:^0.3.0
 ```
 
 Composer also installs Stage Chat. No GitHub account, SSH identity, or VCS
-override is required. Commit the application's lockfile. Version 0.2.4
-adds Codex CLI 0.167.0 compatibility without changing the execution profile; read
+override is required. Commit the application's lockfile. Version 0.3.0
+adds optional bounded JPEG input while preserving existing text calls; read
 [the changelog](CHANGELOG.md) before updating. Running real completions requires a separately installed, supported
 Codex CLI and an approved authenticated account.
 
@@ -116,6 +116,38 @@ Authentication, retrieval, tenant isolation, safe HTML rendering, request and
 concurrency limits, browser history and the maximum number of answer points
 belong in the application. Stage core and Stage CMS are not runtime dependencies.
 
+## Attach a JPEG
+
+The Codex adapter accepts one optional JPEG alongside the request:
+
+```php
+use Stage\Chat\Codex\JpegImage;
+
+$response = $chat->complete($request, image: new JpegImage($jpegBytes));
+```
+
+`$jpegBytes` contains the JPEG itself, not a path or URL. The image must be at
+most 4 MiB, at most 4096 pixels on either side, and at most 4,194,304 pixels in
+total. GD is required for image validation; text-only callers do not need it.
+Invalid or undecodable images throw `InvalidArgumentException` before any
+process starts. The existing second `cancelled` argument keeps its meaning.
+Image input is specific to this adapter; the shared `Stage\Chat\Request` and
+`Connector` interface remain unchanged.
+
+For frame selection, build a small contact sheet in the application and request
+a frame number using its static output schema. Verify the returned number
+against the supplied frames before using it. The connector does not extract
+frames, select a thumbnail itself, or validate the meaning of a model answer.
+
+The image reaches the provider as user data. Text inside it grants no tool
+permissions. The same tool-free profile, model, tier, deadline and output
+limits apply. A private temporary file exists during completion and is removed
+on return, provider failure, cancellation or timeout. Configure a suitable
+private runtime temp location; see [image lifecycle](docs/operations.md#image-lifecycle).
+Bytes are sent unchanged, including metadata: strip metadata in the application
+when it is unnecessary. Image-capable model and account access require separate
+verification with an authorized synthetic input.
+
 ## Verify
 
 ```sh
@@ -123,6 +155,8 @@ composer install
 composer check
 python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6.1-sol --concurrency 3
 python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6.1-sol --service-tier fast --concurrency 3
+python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6-luna --concurrency 3 --image
+python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6-luna --service-tier fast --concurrency 3 --image
 python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6-astra --reasoning-effort max --concurrency 3
 python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6-astra --reasoning-effort max --service-tier fast --concurrency 3
 python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6-astra --reasoning-effort max --service-tier ultrafast --model-catalog /srv/stage-chat/models.json --concurrency 3
@@ -141,6 +175,8 @@ personal configuration is ignored, context stays in the user data,
 the JSON answer arrives and no prompt or answer marker appears in the temporary
 CLI home. It checks successful and failed provider responses, known conversation
 tables and isolation between concurrent requests. CLI metadata files are expected.
+With `--image`, it also checks that each synthetic JPEG reaches its own request
+byte-for-byte as untrusted image data and leaves no image content in the CLI home.
 See the privacy limits in
 [operations](docs/operations.md).
 

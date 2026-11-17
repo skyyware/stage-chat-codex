@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "abaa7fd26e3383f0f3cafbeb2b0a6474",
+    "content-hash": "2fd468495172efb04f0e6a37a7dc07e4",
     "packages": [
         {
             "name": "skyyware/stage-chat",
@@ -351,7 +351,8 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-09-25T09:31:51+00:00"
+            "time": "2026-09-25T09:31:51+00:00",
+            "published-time": "2026-09-25T09:32:03+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
@@ -1822,7 +1823,8 @@
         "ext-json": "*"
     },
     "platform-dev": {
+        "ext-gd": "*",
         "ext-posix": "*"
     },
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.11.0"
 }
