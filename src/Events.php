@@ -17,6 +17,16 @@ final class Events
     private string $pending = '';
     private ?string $answer = null;
     private bool $completed = false;
+    private ?Diagnostic $diagnostic = null;
+
+    public function __construct(private readonly bool $diagnosticsEnabled = false)
+    {
+    }
+
+    public function diagnostic(): ?Diagnostic
+    {
+        return $this->diagnostic;
+    }
 
     public function receive(#[SensitiveParameter] string $chunk): void
     {
@@ -71,6 +81,10 @@ final class Events
                 return;
             case 'error':
             case 'turn.failed':
+                if ($this->diagnosticsEnabled) {
+                    $error = $event['type'] === 'error' ? $event : ($event['error'] ?? null);
+                    $this->diagnostic = ProviderDiagnostic::fromMessage(is_array($error) ? ($error['message'] ?? null) : null);
+                }
                 throw new Failure(FailureReason::Unavailable);
             case 'turn.completed':
                 $this->completed = true;

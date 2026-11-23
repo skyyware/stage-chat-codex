@@ -12,6 +12,8 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 use Stage\Chat\Codex\Codex;
+use Stage\Chat\Codex\Diagnostic;
+use Stage\Chat\Codex\DiagnosticReceiver;
 use Stage\Chat\Codex\JpegImage;
 use Stage\Chat\Codex\Options;
 use Stage\Chat\Codex\Profile;
@@ -152,12 +154,16 @@ final class ConnectorTest extends TestCase
     public function testUnverifiedCliVersionIsRejectedBeforeAnyChat(): void
     {
         $options = new Options(__DIR__ . '/fixtures/unsupported.php', $this->work, $this->home, 'success', __DIR__ . '/fixtures/answer.json');
+        $receiver = new RecordingReceiver();
         try {
-            new Codex($options)->complete($this->request());
+            new Codex($options, diagnosticReceiver: $receiver)->complete($this->request());
             self::fail('Expected unavailable for unverified CLI version.');
         } catch (Failure $failure) {
             self::assertSame(FailureReason::Unavailable, $failure->reason);
         }
+        self::assertCount(1, $receiver->received);
+        self::assertSame('cli_version', $receiver->received[0]->failureClass->value);
+        self::assertNull($receiver->received[0]->providerHttpStatus);
         self::assertFileDoesNotExist($this->home . '/fixture.pid');
     }
 
@@ -345,12 +351,16 @@ final class ConnectorTest extends TestCase
         $path = $this->modelCatalog();
         $options = new Options(__DIR__ . '/fixtures/started.php', $this->work, $this->home, 'gpt-6-astra', __DIR__ . '/fixtures/answer.json', reasoningEffort: 'max', serviceTier: 'ultrafast', modelCatalogPath: $path);
         file_put_contents($path, '{"models":[]}');
+        $receiver = new RecordingReceiver();
         try {
-            new Codex($options)->complete($this->request());
+            new Codex($options, diagnosticReceiver: $receiver)->complete($this->request());
             self::fail('Expected an unavailable catalog.');
         } catch (Failure $failure) {
             self::assertSame(FailureReason::Unavailable, $failure->reason);
         }
+        self::assertCount(1, $receiver->received);
+        self::assertSame('model_catalog', $receiver->received[0]->failureClass->value);
+        self::assertNull($receiver->received[0]->providerHttpStatus);
         self::assertFileDoesNotExist($this->home . '/process-started');
     }
 
@@ -504,6 +514,98 @@ final class ConnectorTest extends TestCase
     public function testImageDebugOutputHidesContent(): void
     {
         self::assertSame(['bytes' => strlen(jpegFixture())], new JpegImage(jpegFixture())->__debugInfo());
+    }
+
+    #[DataProvider('diagnosticFailures')]
+    public function testOptInDiagnosticsExposeOnlyKnownFailureMetadata(string $mode, string $failureClass, ?int $status, FailureReason $reason): void
+    {
+        $receiver = new RecordingReceiver();
+        try {
+            new Codex($this->options($mode, $mode === 'hang' ? 1.0 : 2.0), diagnosticReceiver: $receiver)->complete($this->request());
+            self::fail('Expected a sanitized failure.');
+        } catch (Failure $failure) {
+            self::assertSame($reason, $failure->reason);
+            self::assertSame(new Failure($reason)->getMessage(), $failure->getMessage());
+            self::assertNull($failure->getPrevious());
+        }
+        self::assertCount(1, $receiver->received);
+        $diagnostic = $receiver->received[0];
+        self::assertSame($failureClass, $diagnostic->failureClass->value);
+        self::assertSame($status, $diagnostic->providerHttpStatus);
+        self::assertSame(['failureClass', 'providerHttpStatus'], array_keys(get_object_vars($diagnostic)));
+        self::assertStringNotContainsString('PRIVATE', json_encode($diagnostic, JSON_THROW_ON_ERROR));
+        $this->assertChildStopped();
+    }
+
+    /** @return iterable<string, array{string, string, ?int, FailureReason}> */
+    public static function diagnosticFailures(): iterable
+    {
+        yield 'stderr is not inspected' => ['error', 'unknown', null, FailureReason::Unavailable];
+        yield 'unknown provider failure' => ['turn-failed', 'unknown', null, FailureReason::Unavailable];
+        yield 'reported authentication failure without status' => ['diagnostic-auth', 'authentication', null, FailureReason::Unavailable];
+        yield 'expired authentication' => ['diagnostic-auth-expired', 'authentication', null, FailureReason::Unavailable];
+        yield 'used authentication' => ['diagnostic-auth-used', 'authentication', null, FailureReason::Unavailable];
+        yield 'revoked authentication' => ['diagnostic-auth-revoked', 'authentication', null, FailureReason::Unavailable];
+        yield 'authentication text in other content is not evidence' => ['diagnostic-auth-embedded', 'unknown', null, FailureReason::Unavailable];
+        yield 'top level error' => ['diagnostic-401', 'authentication', 401, FailureReason::Unavailable];
+        yield 'permission' => ['diagnostic-403', 'permission_denied', 403, FailureReason::Unavailable];
+        yield 'rate limit' => ['diagnostic-429', 'rate_limit', 429, FailureReason::Unavailable];
+        yield 'reported retry limit' => ['diagnostic-retry', 'rate_limit', 429, FailureReason::Unavailable];
+        yield 'request rejection' => ['diagnostic-400', 'provider_request', 400, FailureReason::Unavailable];
+        yield 'provider service' => ['diagnostic-503', 'provider_service', 503, FailureReason::Unavailable];
+        yield 'embedded status is not evidence' => ['diagnostic-embedded', 'unknown', null, FailureReason::Unavailable];
+        yield 'unverified fields are ignored' => ['diagnostic-fields', 'unknown', null, FailureReason::Unavailable];
+        yield 'non-string message' => ['diagnostic-array', 'unknown', null, FailureReason::Unavailable];
+        yield 'one diagnostic for multiple failure events' => ['diagnostic-double', 'authentication', 401, FailureReason::Unavailable];
+        yield 'final unterminated event' => ['diagnostic-final', 'provider_service', 503, FailureReason::Unavailable];
+        yield 'invalid protocol' => ['malformed', 'invalid_response', null, FailureReason::InvalidResponse];
+        yield 'timeout' => ['hang', 'timeout', null, FailureReason::Timeout];
+    }
+
+    public function testDiagnosticReceiverIsBoundToItsInstanceAndDoesNotRunOnSuccess(): void
+    {
+        $receiver = new RecordingReceiver();
+        $connector = new Codex($this->options(), diagnosticReceiver: $receiver);
+        $connector->complete($this->request());
+        try {
+            new Codex($this->options('turn-failed'))->complete($this->request());
+        } catch (Failure) {
+        }
+        $connector->complete($this->request());
+        self::assertSame([], $receiver->received);
+    }
+
+    public function testDiagnosticReceiverCannotReplaceTheSanitizedFailureOrPreventCleanup(): void
+    {
+        $receiver = new class implements DiagnosticReceiver {
+            public function receive(Diagnostic $diagnostic): void
+            {
+                throw new LogicException('PRIVATE_RECEIVER_FAILURE');
+            }
+        };
+        try {
+            new Codex($this->options('diagnostic-401'), diagnosticReceiver: $receiver)->complete($this->request());
+            self::fail('Expected the original failure.');
+        } catch (Failure $failure) {
+            self::assertSame(FailureReason::Unavailable, $failure->reason);
+            self::assertNull($failure->getPrevious());
+        }
+        $this->assertChildStopped();
+    }
+
+    public function testCancellationDiagnosticDoesNotInventAProviderStatus(): void
+    {
+        $receiver = new RecordingReceiver();
+        try {
+            new Codex($this->options(), diagnosticReceiver: $receiver)->complete($this->request(), static fn (): bool => true);
+            self::fail('Expected cancellation.');
+        } catch (Failure $failure) {
+            self::assertSame(FailureReason::Cancelled, $failure->reason);
+        }
+        self::assertCount(1, $receiver->received);
+        self::assertSame('cancelled', $receiver->received[0]->failureClass->value);
+        self::assertNull($receiver->received[0]->providerHttpStatus);
+        self::assertFileDoesNotExist($this->home . '/fixture.pid');
     }
 
     private function options(string $model = 'success', float $timeout = 2): Options

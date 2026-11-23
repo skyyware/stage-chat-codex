@@ -15,7 +15,7 @@ Install the public package from
 [Packagist](https://packagist.org/packages/skyyware/stage-chat-codex):
 
 ```sh
-composer require skyyware/stage-chat-codex:^0.3.0
+composer require skyyware/stage-chat-codex:^0.3.1
 ```
 
 Composer also installs Stage Chat. No GitHub account, SSH identity, or VCS
@@ -115,6 +115,40 @@ than streaming partial text.
 Authentication, retrieval, tenant isolation, safe HTML rendering, request and
 concurrency limits, browser history and the maximum number of answer points
 belong in the application. Stage core and Stage CMS are not runtime dependencies.
+
+## Inspect one failure
+
+Versions 0.3.1 and 0.2.5 add an optional receiver to an individual `Codex`
+instance. Bind it only for the operation you need to diagnose:
+
+```php
+use Stage\Chat\Codex\Diagnostic;
+use Stage\Chat\Codex\DiagnosticReceiver;
+
+$receiver = new class implements DiagnosticReceiver {
+    public ?Diagnostic $failure = null;
+
+    public function receive(Diagnostic $diagnostic): void
+    {
+        $this->failure = $diagnostic;
+    }
+};
+$connector = new Codex($options, diagnosticReceiver: $receiver);
+```
+
+`complete()` still throws the same `Stage\Chat\Failure`. After a failed call,
+the receiver has at most one `Diagnostic` with two readonly fields:
+`failureClass`, a `DiagnosticClass` enum, and `providerHttpStatus`, an integer
+or `null`. Successful calls do not notify it. Receiver exceptions are discarded
+after process cleanup, preserving the original failure.
+
+Known CLI authentication messages and reported HTTP failures map to fixed
+categories. Unrecognized failures remain `unknown`; a missing HTTP status stays
+`null`. A generic process failure does not prove an authentication problem.
+The receiver gets no message, URL, request ID, output, stderr or credentials.
+Stderr remains discarded. Without a receiver, diagnostic parsing is disabled.
+See [diagnostic limits](docs/operations.md#failure-diagnostics) before using the
+result. Keep this operator-only choice out of visitor-controlled requests.
 
 ## Attach a JPEG
 

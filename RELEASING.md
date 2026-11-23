@@ -24,9 +24,12 @@ For JPEG releases, execute the documented image call and verify its temporary
 file is removed. Keep a text-only call working without GD.
 Verify both this package's reference and the resolved Stage Chat reference.
 
-The current release is 0.3.0. It supports CLI versions 0.159.2, 0.159.3,
-0.160.0 and 0.167.0. It adds bounded JPEG input with GD validation and private
-temporary files. Existing text calls, disabled tools and the trusted catalog
+The current release is 0.3.1. It supports CLI versions 0.159.2, 0.159.3,
+0.160.0 and 0.167.0. It adds an opt-in diagnostic receiver and retains bounded
+JPEG input with GD validation and private temporary files. Run the diagnostic
+wire matrix with `--diagnostics` when changing failure classification.
+The 0.2.5 patch provides the same receiver without adding image input.
+Existing text calls, disabled tools and the trusted catalog
 requirement for Ultrafast remain unchanged. Use genuine catalog metadata for the wire check
 and keep that account-specific runtime configuration out of the public package. Later releases
 must update the changelog, examples, CLI compatibility, and verification limits

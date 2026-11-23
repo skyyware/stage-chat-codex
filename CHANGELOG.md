@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1 - 2026-11-23
+
+Adds an optional `DiagnosticReceiver` to an individual `Codex` instance.
+Failed calls can report a fixed `DiagnosticClass` and an HTTP status when the
+CLI actually reports one. Unknown failures and absent statuses stay unknown.
+The receiver gets no provider text or request content. Default calls keep the
+same generic `Failure`, process cleanup, profile, model and tier behavior.
+
+The same receiver contract is available in 0.2.5 for applications on the 0.2
+line. This release retains the optional JPEG support introduced in 0.3.0.
+Subprocess tests cover privacy, isolation and cleanup; the synthetic wire probe
+adds a diagnostic matrix without account access or paid model calls.
+
 ## 0.3.0 — 2026-11-17
 
 `Codex::complete` accepts an optional named `image` argument containing a
