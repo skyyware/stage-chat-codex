@@ -8,7 +8,8 @@ use Stage\Chat\Codex\Events;
 use Stage\Chat\Failure;
 use Stage\Chat\FailureReason;
 
-$events = new Events();
+$diagnostics = ($argv[1] ?? '') === 'diagnostics';
+$events = new Events($diagnostics);
 try {
     while (!feof(STDIN)) {
         $chunk = fread(STDIN, 8192);
@@ -24,6 +25,10 @@ try {
     $result = ['status' => 'complete', 'answer_sha256' => hash('sha256', $answer['answer'])];
 } catch (Failure $failure) {
     $result = ['status' => 'failure', 'reason' => $failure->reason->value];
+    if ($diagnostics) {
+        $result['failure_class'] = $events->diagnostic()?->failureClass->value;
+        $result['provider_http_status'] = $events->diagnostic()?->providerHttpStatus;
+    }
 }
 
 fwrite(STDOUT, json_encode($result, JSON_THROW_ON_ERROR));

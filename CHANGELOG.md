@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.5 - 2026-11-23
+
+Adds an optional `DiagnosticReceiver` to an individual `Codex` instance.
+Failed calls can report a fixed `DiagnosticClass` and an HTTP status when the
+CLI actually reports one. Unknown failures and absent statuses stay unknown.
+The receiver gets no provider text or request content. Default calls keep the
+same generic `Failure`, process cleanup, profile, model and tier behavior.
+
+This patch keeps the text-only 0.2 API. The same receiver contract is available
+in 0.3.1 for applications using optional JPEG input.
+Subprocess tests cover privacy, isolation and cleanup; the synthetic wire probe
+adds a diagnostic matrix without account access or paid model calls.
+
 ## 0.2.4 — 2026-11-13
 
 Codex CLI 0.167.0 joins the existing verified version allowlist. The connector

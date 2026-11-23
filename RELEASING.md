@@ -20,8 +20,10 @@ subprocess pipes with the local fake CLI, including explicit Fast and
 catalog-backed Ultrafast selection and rejection without an advertised tier.
 Verify both this package's reference and the resolved Stage Chat reference.
 
-The current release is 0.2.4. It supports CLI versions 0.159.2, 0.159.3,
-0.160.0 and 0.167.0. The fixed execution profile and trusted catalog requirement
+The current release is 0.2.5. It supports CLI versions 0.159.2, 0.159.3,
+0.160.0 and 0.167.0. It adds an opt-in diagnostic receiver. Run the diagnostic
+wire matrix with `--diagnostics` when changing failure classification.
+The fixed execution profile and trusted catalog requirement
 for Ultrafast remain unchanged. Use genuine catalog metadata for the wire check
 and keep that account-specific runtime configuration out of the public package. Later releases
 must update the changelog, examples, CLI compatibility, and verification limits

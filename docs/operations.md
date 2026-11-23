@@ -232,6 +232,61 @@ strings. The connector's own errors contain only a stable failure category.
 Render output as text or safely escaped markup, and validate links against the
 application's selected sources.
 
+## Failure diagnostics
+
+Pass `diagnosticReceiver: $receiver` to one `Codex` instance when a bounded
+operator check needs more than the generic `FailureReason`. The receiver
+implements `DiagnosticReceiver::receive(Diagnostic $diagnostic): void`.
+It receives at most one notification per failed `complete()` call, after child
+process cleanup. A successful call produces no notification. A
+receiver exception is discarded; it cannot replace the original failure.
+The connector keeps no diagnostic history and writes no diagnostic files.
+The caller owns the receiver's lifetime and any permitted retention.
+
+`Diagnostic` contains only `failureClass` and nullable `providerHttpStatus`.
+Use `failureClass->value` for its fixed string value:
+
+| Value | Evidence |
+| --- | --- |
+| `authentication` | An exact CLI token-refresh failure message, or reported HTTP 401 |
+| `permission_denied` | Reported HTTP 403 |
+| `rate_limit` | Reported HTTP 429 |
+| `provider_request` | Another reported HTTP 4xx failure |
+| `provider_service` | Reported HTTP 5xx failure |
+| `model_catalog` | The trusted catalog no longer accepts the configured selection |
+| `cli_version` | The executable reports an unsupported version |
+| `timeout` | The connector's deadline expired |
+| `cancelled` | The caller requested cancellation |
+| `invalid_response` | The connector rejected output or its size |
+| `unknown` | No supported classification is available |
+
+The supported CLI JSON events contain a message, not a separate HTTP status
+field. Classification accepts only full known token-refresh sentences and the
+CLI's leading `unexpected status` or `exceeded retry limit, last status` formats.
+It does not search arbitrary text for status numbers or infer a status from
+authentication wording. For example, CLI 0.167.0 can turn a provider's HTTP 400
+into a statusless error; that remains `unknown` with a `null` status. These are
+reported error categories, not proof of an account's current state or permission
+to refresh credentials, retry, change account or change model.
+
+The receiver never receives provider text, stderr, prompts, answers, URLs,
+request IDs or credentials. Do not expose the receiver through a public route,
+query option or visitor-selected header. Omitting it preserves the generic
+error path and skips message classification. No environment switch or global
+receiver exists.
+
+Run the diagnostic matrix against a local synthetic provider with:
+
+```sh
+python3 -B tests/wire_probe.py --binary /opt/codex/0.159.3/codex --model gpt-6-luna --diagnostics
+```
+
+This checks success and HTTP 400, 401, 403, 429 and 503, the fixed decoded
+metadata and the existing content-retention checks. It uses no provider account.
+The subprocess tests also cover statusless authentication, unknown or embedded
+text, receiver isolation, callback failure, cancellation and timeouts. Their
+deadlines allow both CLI startup and the version check before the tested event.
+
 ## Release checks
 
 Run `composer check` for every package release. After a profile, CLI, model,

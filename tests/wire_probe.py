@@ -13,7 +13,7 @@ import threading
 import uuid
 
 
-def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, concurrency, provider_error):
+def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, concurrency, provider_error, diagnostics=False, provider_status=400):
     package = Path(__file__).resolve().parent.parent
     runtime = package / ".runtime"
     runtime.mkdir(mode=0o700, exist_ok=True)
@@ -37,7 +37,7 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
                     raise ValueError("Missing or cross-request source context")
                 response_marker = matching[0]
                 if provider_error:
-                    self.send_response(400)
+                    self.send_response(provider_status)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
                     self.wfile.write(json.dumps({"error": {
@@ -127,17 +127,20 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
         for result, response_marker in zip(results, markers.values()):
             if (result.returncode == 0) == provider_error:
                 raise RuntimeError("Unexpected CLI exit status " + str(result.returncode))
-            if response_marker not in result.stdout:
+            if response_marker not in result.stdout and not (provider_error and provider_status == 429):
                 raise RuntimeError("Expected answer or provider failure missing")
             if any(other in result.stdout for other in markers.values() if other != response_marker):
                 raise RuntimeError("Cross-request answer leakage")
             decoded = json.loads(subprocess.check_output(
-                [php, str(package / "tests" / "wire-response.php")],
+                [php, str(package / "tests" / "wire-response.php"), "diagnostics" if diagnostics else ""],
                 input=result.stdout, text=True, timeout=5,
             ))
             expected = {"status": "failure", "reason": "unavailable"} if provider_error else {
                 "status": "complete", "answer_sha256": hashlib.sha256(response_marker.encode()).hexdigest(),
             }
+            if diagnostics and provider_error:
+                classes = {400: "unknown", 401: "authentication", 403: "permission_denied", 429: "rate_limit", 503: "provider_service"}
+                expected.update(failure_class=classes[provider_status], provider_http_status=None if provider_status == 400 else provider_status)
             if decoded != expected:
                 raise RuntimeError("Connector could not decode the CLI response")
         for request in captured:
@@ -180,6 +183,8 @@ def run(binary, php, model, service_tier, reasoning_effort, model_catalog_path, 
                           "reasoning_effort": captured[0].get("reasoning", {}).get("effort"), "requests": len(captured), "tools": 0,
                           "response_storage": False, "content_markers_on_disk": 0, "content_rows": 0, "concurrency": concurrency,
                           "connector_decoder": "verified",
+                          "diagnostics": diagnostics,
+                          "fixture_http_status": provider_status if provider_error else 200,
                           "scenario": "provider-error" if provider_error else "success", "provider": "local synthetic fixture"}))
 
 
@@ -191,6 +196,7 @@ parser.add_argument("--service-tier", choices=["fast", "ultrafast"])
 parser.add_argument("--reasoning-effort", choices=["none", "minimal", "low", "medium", "high", "max"], default="low")
 parser.add_argument("--model-catalog", type=os.path.abspath)
 parser.add_argument("--concurrency", type=int, choices=range(1, 4), default=1)
+parser.add_argument("--diagnostics", action="store_true")
 arguments = parser.parse_args()
-for provider_error in [False, True]:
-    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.reasoning_effort, arguments.model_catalog, arguments.concurrency, provider_error)
+for status in ([200, 400, 401, 403, 429, 503] if arguments.diagnostics else [200, 400]):
+    run(os.path.abspath(arguments.binary), os.path.abspath(arguments.php), arguments.model, arguments.service_tier, arguments.reasoning_effort, arguments.model_catalog, arguments.concurrency, status != 200, arguments.diagnostics, status)
